@@ -35,6 +35,20 @@ React UI  (port 3000)
   TL;DR panel │ Explanation panel │ Code Fix (diff, syntax-highlighted) │ Citations
 ```
 
+![System Architecture](docs/debug_assistant_architecture.png)
+
+---
+
+## Ingestion Flow
+
+![Ingestion Flow](docs/debug_assistant_ingestion_flow.png)
+
+---
+
+## Retrieval Flow
+
+![Retrieval Flow](docs/debug_assistant_retrieval_flow.png)
+
 ---
 
 ## Key Technical Decisions
