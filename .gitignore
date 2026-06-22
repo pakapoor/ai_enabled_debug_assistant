@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Libraries / dependencies
+lib/
+lib64/
+site-packages/
+
+# External repos (large, cloned separately)
+repos/
+
+# Docker volumes (managed by Docker, not Git)
+pgdata/
+ollama/
+
+# Environment secrets
+.env
+*.env
+!.env.example
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.log
+*.tmp
+1
+debug-assistant-ui/node_modules/
+debug-assistant-ui/.env.
+bugs/*.yaml
+tests/output.txt
+.claude/
+*.docx
+*.pdf

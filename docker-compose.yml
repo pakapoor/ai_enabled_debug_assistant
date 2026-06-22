@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rag-demo-postgres
+    environment:
+      POSTGRES_DB: ragdemo
+      POSTGRES_USER: raguser
+      POSTGRES_PASSWORD: ragpass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raguser -d ragdemo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-demo-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    # On Apple Silicon this will run CPU/Metal outside Docker only if you use native Ollama.
+    # For fastest Mac demo, install Ollama natively and remove this service.
+
+  backend:
+    image: python:3.11-slim
+    container_name: rag-demo-backend
+    working_dir: /app
+    command: bash -lc "pip install fastapi uvicorn psycopg[binary] pyyaml gitpython numpy && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://raguser:ragpass@postgres:5432/ragdemo
+      BUGS_DIR: /data/bugs
+      REPOS_DIR: /data/repos
+      PROJECT_CONFIG: /data/config/projects.yml
+      EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: llama3.1:8b
+    volumes:
+      - ./app:/app/app
+      - ./bugs:/data/bugs:ro
+      - ./repos:/data/repos
+      - ./config:/data/config:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+
+volumes:
+  pgdata:
+  ollama:

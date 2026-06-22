@@ -1,0 +1,30 @@
+projects:
+  - id: xcelium-demo
+    display_name: Xcelium Debug Demo
+    bug_source:
+      type: local_yaml
+      path: /data/bugs
+    git_repos:
+      - name: simulator-core
+        path: /data/repos/simulator-core
+        branch: main
+    chunking:
+      prose_chunk_tokens: 500
+      code_strategy: tree_sitter_or_function_boundary
+      diff_context_lines: 40
+    retrieval:
+      vector_top_k: 20
+      keyword_top_k: 20
+      rerank_top_k: 5
+    query_readiness:
+      minimum_fields_any_of:
+        - [issue_type, file]
+        - [issue_type, stack_trace]
+        - [test_name, error_message]
+      ask_for_fields:
+        - stack_trace
+        - test_name
+        - branch
+        - build_id
+        - file
+        - line
