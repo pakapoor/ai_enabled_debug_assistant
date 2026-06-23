@@ -8,7 +8,7 @@ An on-premises RAG system that helps engineers diagnose bugs faster by searching
 
 ## How It Works
 
-```
+```text
 Engineer types query
         │
         ▼
@@ -61,7 +61,7 @@ Pinecone and Qdrant are purpose-built vector stores but they split your data acr
 
 Pure vector search struggles with exact technical terms (function names, error codes, file paths). Pure keyword search misses semantic similarity. The system runs both in parallel and merges results with a custom Reciprocal Rank Fusion variant:
 
-```
+```text
 base_score = 100 - (rank × 5)
 final_score = base_score + bug_boost - doc_penalty
 ```
@@ -105,7 +105,7 @@ If `confidence` is `"low"` (fewer than two qualifying signals present), the API 
 
 The answer API instructs the LLM to respond in a fixed three-section format:
 
-```
+```text
 TLDR:
 <one sentence>
 
@@ -127,6 +127,7 @@ def ask_llm(prompt: str, timeout: int = 60) -> str: ...
 ```
 
 Swapping providers is a one-file change. Tested with:
+
 - **Ollama phi3:3.8b** — local CPU inference (slow, inconsistent instruction following)
 - **Groq llama-3.3-70b** — fast cloud inference, good quality
 - **Google Gemini 1.5 Flash / 2.0 Flash** — current default, best quality/cost ratio
@@ -208,7 +209,7 @@ npm start
 
 ### Example queries
 
-```
+```text
 crash in generic.py around line 2393 not related to scheduler
 DataFrame groupby aggregate memory error
 BUG duplicated loses index
@@ -219,7 +220,7 @@ hang in the dispatcher not a.cpp
 
 ## Project Structure
 
-```
+```text
 .
 ├── answer_api.py                       # FastAPI port 8002 — full pipeline endpoint
 ├── hybrid_api.py                       # FastAPI port 8001 — hybrid search endpoint
@@ -304,6 +305,189 @@ CREATE INDEX ON chunks USING GIN(metadata);
 | Infrastructure | Docker Compose |
 | Language | Python 3.11, JavaScript (React) |
 | Data source | pandas GitHub repository (500 commits, ~2,037 chunks) |
+
+---
+
+## Design Decisions & Deep Dives
+
+### Q1: Chunking strategy
+
+**Two-tier, source-aware chunking:**
+- Commit messages + file lists → parent chunks (`git_commit` source type)
+- Per-file patches → child chunks (`git_patch_file` source type)
+
+For code chunks, Python's built-in `ast` module parses each changed file to identify the enclosing class and function for every hunk start line. The full function source (up to 120 lines) is injected as `FUNCTION CONTEXT` into each child chunk. This means retrieval hits the exact function body, not an arbitrary 500-token window.
+
+For oversized functions (>120 lines), the function source is truncated with a note — a windowed-diff fallback is on the V2 roadmap.
+
+**Why not fixed-size chunking?** Fixed-size chunking splits functions mid-logic. A query about `DataFrame.groupby()` would get a random 500-token window rather than the complete function, destroying retrieval quality.
+
+---
+
+### Q2: Vector DB choice — pgvector over Pinecone/Qdrant
+
+pgvector was chosen because one row holds vector + text + metadata atomically. A single query can do semantic search, keyword search, and metadata filtering together without joining across two systems.
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| pgvector | Chosen | Atomic row, hybrid search native, self-hostable |
+| Pinecone | Rejected | Data leaves perimeter, managed only |
+| Qdrant | Close alternative | Loses one-row atomicity |
+| Weaviate | Rejected | JVM overhead for capability Postgres already provides |
+| Milvus | Rejected | Billion-vector scale — overkill at 2K chunks |
+
+Past ~5M chunks, pgvector has no native sharding — path would be Citus extension or app-level partitioning by project.
+
+---
+
+### Q3: Hybrid search design
+
+Pure vector search blurs exact technical terms (function names, file paths, error codes). Pure BM25 misses semantic paraphrases ("SIGABRT" ≈ "SIGSEGV" ≈ "program crashed"). The system runs both in parallel:
+
+```text
+BM25 top-10 + vector top-10 → custom RRF scoring → top-3
+```
+
+Custom scoring formula:
+
+```text
+base_score  = 100 - (rank × 5)
+final_score = base_score + bug_boost - doc_penalty
+
+bug_boost   = +50   (chunks where is_bug = True)
+doc_penalty = -30   (chunks from .rst, .md, whatsnew/ files)
+```
+
+The bug boost ensures actual fix commits surface above general refactors. The doc penalty ensures engineers get code patches, not changelog entries.
+
+---
+
+### Q4: Metadata storage — JSONB over a separate document store
+
+Metadata lives in Postgres JSONB alongside the vector and text, not in a separate MongoDB instance. MongoDB's "schemaless" flexibility is a property of the JSON data model, not MongoDB-exclusive — JSONB provides identical flexibility. Keeping everything in one row preserves atomicity: vector, text, and metadata update together or not at all.
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| Postgres JSONB | Chosen | Same schema flexibility, zero extra system, atomicity preserved |
+| MongoDB (separate) | Rejected | Breaks atomicity — vector and metadata would need to be joined across two systems |
+
+---
+
+### Q5: Embedding model choice
+
+**bge-small-en-v1.5** (384-dim, BAAI) was chosen for V1 based on hardware constraints — the development machine is a Snapdragon X laptop with 16GB RAM running WSL2. Larger models (bge-large-en-v1.5, 1024-dim) would produce higher-quality embeddings but were too slow for iterative development on this hardware.
+
+The model runs fully self-hosted via FlagEmbedding — no API calls, no data leaving the machine.
+
+| Option | Verdict | Reason |
+|--------|---------|--------|
+| bge-small-en-v1.5 (384-dim) | Chosen | Fast on CPU, self-hostable, fits V1 hardware |
+| bge-large-en-v1.5 (1024-dim) | V2 candidate | Higher quality but too slow for CPU-only iteration |
+| bge-m3 (multilingual, 1024-dim) | V2 candidate | Multilingual not needed for English-only corpus |
+| OpenAI / Cohere (API-based) | Rejected | Data leaves perimeter for any on-prem deployment |
+
+---
+
+### Q6: Indexing — cosine similarity, HNSW, GIN
+
+Cosine similarity measures the angle between vectors, ignoring magnitude. This matters for text because chunk length inflates vector magnitude arbitrarily — a short query and a long commit message about the same bug shouldn't appear "far apart" just because one is longer.
+
+In practice, V1 uses **dot product on pre-normalized vectors** — normalization happens once at ingestion, so every query gets cosine correctness at dot product speed.
+
+The HNSW (Hierarchical Navigable Small World) index is commented out in `init.sql` and should be enabled after bulk load in production. Without it, pgvector falls back to exact sequential scan — acceptable at 2K chunks, does not scale.
+
+Three index types in use:
+
+| Index | Column | Purpose |
+|-------|--------|---------|
+| HNSW | `embedding` | Approximate nearest-neighbor vector search |
+| GIN | `to_tsvector(chunk_text)` | BM25-equivalent full-text search |
+| GIN | `metadata` | Fast JSONB filtering (`is_bug`, `file`, `source_type`) |
+
+HNSW is approximate — may occasionally miss the single true closest match. Acceptable because the system retrieves top-20 candidates before scoring, not just top-1.
+
+---
+
+### Q7: Query understanding — structured extraction and sufficiency gate
+
+Before touching the search index, every query passes through `query_understanding.py`, which makes a fast LLM call to extract structured JSON:
+
+```json
+{
+  "signal": "crash",
+  "file": "generic.py",
+  "function": "groupby",
+  "line": 2393,
+  "stack_trace": false,
+  "keywords": ["groupby", "aggregate"],
+  "negations": ["scheduler"],
+  "confidence": "high",
+  "follow_up": null
+}
+```
+
+If `confidence` is `"low"` (fewer than two qualifying signals — signal word, file name, function name, or technical keywords), the API returns a follow-up question immediately — no search, no LLM generation, no latency wasted. A bare query like `"it crashed"` or `"hang"` alone triggers this gate.
+
+Negations (`"not scheduler"`, `"not a.cpp"`) are extracted and surfaced in the UI so the engineer knows what was excluded. Spelling correction runs in the same call — `"datafrme"` → `"DataFrame"`, `"gruopby"` → `"groupby"`.
+
+---
+
+### Q8: LLM choice — provider-agnostic design
+
+`llm_client.py` is a single-function interface — swapping providers is a one-file change:
+
+```python
+def ask_llm(prompt: str, timeout: int = 60) -> str: ...
+```
+
+Providers tested:
+
+| Provider | Model | Latency | Quality | Notes |
+|----------|-------|---------|---------|-------|
+| Ollama (local) | phi3:3.8b | ~90s | Inconsistent | CPU-only on Snapdragon X, ignores format instructions |
+| Groq | llama-3.3-70b-versatile | ~2s | Excellent | Free tier: 100K tokens/day |
+| Google Gemini | gemini-3.1-flash-lite | ~3s | Good | Current default |
+
+For a production deployment with on-prem data sovereignty requirements, **Llama 3 70B via vLLM on a GPU server** is the right choice — Apache license, Western origin (no procurement friction in regulated industries), mature self-hosting tooling.
+
+---
+
+### Q9: Prompt design — structured output and grounding
+
+The answer API instructs the LLM to respond in a fixed three-section format:
+
+```text
+TLDR:
+<one sentence>
+
+EXPLANATION:
+<2-3 paragraphs>
+
+CODE:
+<raw diff lines, no markdown fences>
+```
+
+`answer_api.py` parses this deterministically by scanning for the exact section headers. Fallbacks handle non-compliant model output:
+
+- If `TLDR:` is missing → first sentence of `EXPLANATION` is used
+- If `CODE:` contains markdown fences → stripped before rendering
+- If `CODE:` bleeds into citations (lines starting with `[commit:`) → truncated at that boundary
+
+The system prompt includes: *"If the answer is not supported by the context, say I don't know."* For a debugging tool, a confidently wrong answer is worse than no answer — an engineer might spend hours chasing a fabricated root cause.
+
+---
+
+### Q10: Why no agent framework in V1?
+
+V1's pipeline is fully linear and determined before the LLM is called:
+
+```text
+query understanding → sufficiency check → hybrid search → prompt assembly → generate
+```
+
+Agent orchestration (LangGraph, LangChain agents) solves the problem of *deciding what to do next* — branching mid-flow, calling tools, multi-step reasoning. V1 doesn't have that problem. Adding an agent framework would be unjustified complexity with no payoff.
+
+V2 roadmap includes a multi-agent architecture: a **Triage Agent** (query classification), **Root Cause Agent** (retrieval + synthesis), and **Fix Suggester Agent** (patch recommendation), coordinated by a LangGraph orchestrator. That's when the framework investment becomes justified.
 
 ---
 
