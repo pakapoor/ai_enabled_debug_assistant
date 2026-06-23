@@ -4,6 +4,10 @@ An on-premises RAG system that helps engineers diagnose bugs faster by searching
 
 > **Screenshot:** *(to be added)*
 
+## Demo
+
+[Watch demo video](demos/demo1.mp4)
+
 ---
 
 ## How It Works
