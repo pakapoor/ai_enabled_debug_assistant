@@ -200,13 +200,15 @@ React UI  (port 3000)
 ## Coming Soon
 
 - [ ] **One-click onboarding** — paste a Git URL and the system clones, ingests, and indexes your repo automatically, no manual scripts needed
-- [ ] **Blame-search mode** — ask "what changed recently that broke this?" and the system surfaces commits from the past 30/60/90 days, not just historical fixes
+- [ ] **Recency-weighted blame search** — ask "what changed recently that broke this?" and the system surfaces commits from the past 30/60/90 days weighted by recency, not just historical fixes
 - [ ] **Search your whole codebase** — opt in to index all source files, not just changed files, so you can ask questions about any function or class even if it was never in a bug fix commit
 - [ ] **Answers as they stream** — results appear word by word as the LLM generates them, no waiting for the full response
 - [ ] **Smarter result ranking** — a second-pass reranker filters candidates for relevance before presenting results, reducing noise in the top 3
 - [ ] **Repeat queries answered instantly** — results are cached for 24 hours so the same query returns immediately on second ask
 - [ ] **Multi-agent reasoning** — separate specialized agents for query understanding, retrieval, and fix suggestion work in parallel for richer answers
 - [ ] **Team-scale deployment** — authentication layer and multi-user support for shared team access
+- [ ] **Fast vector search at scale** — HNSW approximate nearest-neighbor index enabled for sub-millisecond search as your corpus grows beyond thousands of chunks
+- [ ] **Automated test suite** — integration tests for the full pipeline against a fixed fixture corpus so contributors can validate changes confidently
 
 ---
 
