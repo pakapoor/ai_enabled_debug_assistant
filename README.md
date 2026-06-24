@@ -98,35 +98,34 @@ cd debug-assistant-ui && npm install && cd ..
 
 ### Step 4 — Point to your repository and ingest
 
-**To use your own repo** (replace the demo pandas dataset):
+**To use your own repo:**
 
-1. Clone the target repository anywhere on your machine:
+1. Clone the target repository:
 
    ```bash
    git clone https://github.com/your-org/your-repo.git ~/rag_data/your-repo
    ```
 
-2. Open `ingest_panda_commits_with_patch.py` and `create_patch_child_chunks.py` and update these two lines at the top of each file:
+2. Open `ingest_commits.py` and `create_patch_child_chunks.py` and set the `PROJECT` variable at the top of each file:
 
    ```python
-   REPO = Path.home() / "rag_data" / "your-repo"   # path to your cloned repo
+   PROJECT = "your-repo"   # must match in both files
    ```
 
-   Also update the project name string (search for `"pandas"` in both files and replace with your project name, e.g. `"my-repo"`).
+3. Optionally adjust `LIMIT = 500` in `ingest_commits.py` to control how many commits to ingest.
 
-3. Optionally adjust `LIMIT = 500` in `ingest_panda_commits_with_patch.py` to control how many commits to ingest.
-
-**To try the system with the included pandas demo**, clone pandas first:
+**To try the included pandas demo**, clone pandas first:
 
 ```bash
 git clone https://github.com/pandas-dev/pandas.git ~/rag_data/pandas
+# then set PROJECT = "pandas" in both ingest files
 ```
 
 Then run the three ingestion stages:
 
 ```bash
 # Stage 1: ingest commits with full patches
-python3 ingest_panda_commits_with_patch.py
+python3 ingest_commits.py
 
 # Stage 2: generate AST-enriched per-file child chunks
 python3 create_patch_child_chunks.py
@@ -249,7 +248,7 @@ final_score = base_score + bug_boost - doc_penalty
 
 Git commits are ingested at two levels:
 
-1. **Parent chunk** — full commit: subject, body, author, date, files changed, and truncated patch (20,000 char cap). Ingested by `ingest_panda_commits_with_patch.py`.
+1. **Parent chunk** — full commit: subject, body, author, date, files changed, and truncated patch (20,000 char cap). Ingested by `ingest_commits.py`.
 2. **Child chunks** — one chunk per changed file within the patch, extracted by `create_patch_child_chunks.py`. Each child chunk adds:
    - Python AST parsing to identify the enclosing class and function for every hunk start line
    - Full function source (up to 120 lines) injected as `FUNCTION CONTEXT`
@@ -321,7 +320,8 @@ Swapping providers is a one-file change. Tested with:
 ├── prompt_builder.py                   # Grounded prompt construction
 ├── config.py                           # Env-var configuration
 │
-├── ingest_panda_commits_with_patch.py  # Stage 1: commit ingestion with patches
+├── ingest_commits.py                   # Stage 1: commit ingestion with patches
+├── ingest_commits_legacy.py            # Stage 1 (legacy, no patch content)
 ├── create_patch_child_chunks.py        # Stage 2: AST-enriched per-file chunks
 ├── app/compute_embeddings.py           # Stage 3: BGE embeddings → DB
 │
@@ -361,8 +361,8 @@ Swapping providers is a one-file change. Tested with:
 
 ```sql
 CREATE TABLE chunks (
-  id           TEXT PRIMARY KEY,   -- e.g. "pandas-commit-abc123-patch-002"
-  project      TEXT NOT NULL,      -- "pandas"
+  id           TEXT PRIMARY KEY,   -- e.g. "my-repo-commit-abc123-patch-002"
+  project      TEXT NOT NULL,      -- your PROJECT name, e.g. "my-repo"
   source_type  TEXT NOT NULL,      -- "git_commit" | "git_patch_file"
   source_id    TEXT NOT NULL,      -- commit SHA
   parent_id    TEXT,               -- set on child chunks

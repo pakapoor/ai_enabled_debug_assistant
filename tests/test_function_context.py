@@ -2,7 +2,7 @@ import ast
 from pathlib import Path
 
 
-REPO = Path("repos/pandas")
+REPO = Path.home() / "rag_data" / "your-project"  # update to match your PROJECT setting
 
 
 def get_function_source(file_path, function_name):

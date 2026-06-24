@@ -4,7 +4,8 @@ from psycopg.types.json import Jsonb
 from pathlib import Path
 from config import POSTGRES_URL
 
-REPO = Path("repos/pandas")
+PROJECT = "your-project"          # change to your repo name
+REPO = Path.home() / "rag_data" / PROJECT
 LIMIT = 500
 
 conn = psycopg.connect(POSTGRES_URL)
@@ -52,7 +53,7 @@ for idx, commit_hash in enumerate(hashes):
     files = [line.strip() for line in files_raw.splitlines() if line.strip()]
 
     text = f"""
-SOURCE: pandas git commit
+SOURCE: {PROJECT} git commit
 COMMIT: {commit_hash}
 AUTHOR: {author}
 DATE: {date}
@@ -65,7 +66,7 @@ FILES CHANGED:
 {' '.join(files)}
 """
 
-    chunk_id = f"pandas-commit-{commit_hash[:12]}"
+    chunk_id = f"{PROJECT}-commit-{commit_hash[:12]}"
 
     metadata = {
         "commit": commit_hash,
@@ -87,7 +88,7 @@ FILES CHANGED:
         """,
         (
             chunk_id,
-            "pandas",
+            PROJECT,
             "git_commit",
             commit_hash,
             idx,
@@ -101,4 +102,4 @@ FILES CHANGED:
 conn.commit()
 conn.close()
 
-print(f"Inserted/updated {inserted} pandas commits")
+print(f"Inserted/updated {inserted} commits")

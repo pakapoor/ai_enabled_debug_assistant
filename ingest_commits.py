@@ -4,7 +4,8 @@ from psycopg.types.json import Jsonb
 from pathlib import Path
 from config import POSTGRES_URL
 
-REPO = Path.home() / "rag_data" / "pandas"
+PROJECT = "your-project"          # change to your repo name (used as the project key in the DB)
+REPO = Path.home() / "rag_data" / PROJECT  # path to your cloned repo
 LIMIT = 500
 MAX_PATCH_CHARS = 20000
 
@@ -63,7 +64,7 @@ for idx, commit_hash in enumerate(hashes):
         patch_truncated = True
 
     text = f"""
-SOURCE: pandas git commit
+SOURCE: {PROJECT} git commit
 COMMIT: {commit_hash}
 AUTHOR: {author}
 DATE: {date}
@@ -79,7 +80,7 @@ PATCH:
 {patch}
 """
 
-    chunk_id = f"pandas-commit-{commit_hash[:12]}"
+    chunk_id = f"{PROJECT}-commit-{commit_hash[:12]}"
 
     metadata = {
         "commit": commit_hash,
@@ -105,7 +106,7 @@ PATCH:
         """,
         (
             chunk_id,
-            "pandas",
+            PROJECT,
             "git_commit",
             commit_hash,
             idx,
@@ -123,4 +124,4 @@ PATCH:
 conn.commit()
 conn.close()
 
-print(f"Done. Inserted/updated {inserted} pandas commits with patches.")
+print(f"Done. Inserted/updated {inserted} commits with patches.")

@@ -7,7 +7,8 @@ from psycopg.types.json import Jsonb
 from config import POSTGRES_URL
 
 
-REPO = Path.home() / "rag_data" / "pandas"
+PROJECT = "your-project"          # change to your repo name (must match ingest_commits.py)
+REPO = Path.home() / "rag_data" / PROJECT
 MAX_FUNCTION_CONTEXT_LINES = 120
 
 
@@ -161,11 +162,11 @@ cur = conn.cursor()
 cur.execute("""
 SELECT id, source_id, chunk_text, metadata
 FROM chunks
-WHERE project = 'pandas'
+WHERE project = %s
   AND source_type = 'git_commit'
   AND chunk_text LIKE '%PATCH:%'
 ORDER BY chunk_index;
-""")
+""", (PROJECT,))
 
 parents = cur.fetchall()
 
@@ -229,7 +230,7 @@ FUNCTION CONTEXT:
 """
 
         child_text = f"""
-SOURCE: pandas git patch file
+SOURCE: {PROJECT} git patch file
 COMMIT: {commit_hash}
 PARENT_CHUNK: {parent_id}
 AUTHOR: {author}
@@ -276,7 +277,7 @@ PATCH:
             """,
             (
                 child_id,
-                "pandas",
+                PROJECT,
                 "git_patch_file",
                 commit_hash,
                 parent_id,
