@@ -185,15 +185,15 @@ React UI  (port 3000)
   TL;DR panel │ Explanation panel │ Code Fix (diff, syntax-highlighted) │ Citations
 ```
 
-![System Architecture](docs/debug_assistant_architecture.png)
+![System Architecture](docs/debug_assistant_architecture.svg)
 
 ### Ingestion Flow
 
-![Ingestion Flow](docs/debug_assistant_ingestion_flow.png)
+![Ingestion Flow](docs/debug_assistant_ingestion_flow.svg)
 
 ### Retrieval Flow
 
-![Retrieval Flow](docs/debug_assistant_retrieval_flow.png)
+![Retrieval Flow](docs/debug_assistant_retrieval_flow.svg)
 
 ---
 

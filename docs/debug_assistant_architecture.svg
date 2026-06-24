@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="480" font-family="'Segoe UI', Arial, sans-serif">
+  <rect width="680" height="480" fill="#f6f8fa" rx="10"/>
+
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#8c959f"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="340" y="34" text-anchor="middle" font-size="15" font-weight="bold" fill="#1f2328">System Architecture</text>
+
+  <!-- Box 1: User -->
+  <rect x="230" y="52" width="220" height="44" rx="6" fill="#0969da"/>
+  <text x="340" y="79" text-anchor="middle" font-size="13" font-weight="600" fill="#ffffff">Engineer types query</text>
+
+  <line x1="340" y1="96" x2="340" y2="116" stroke="#8c959f" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Box 2: Query Understanding -->
+  <rect x="140" y="116" width="400" height="68" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="340" y="140" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">Query Understanding</text>
+  <text x="340" y="160" text-anchor="middle" font-size="11" fill="#656d76">LLM → { signal, file, function, negations, confidence }</text>
+  <text x="340" y="176" text-anchor="middle" font-size="11" fill="#cf222e">confidence = "low"  →  return follow-up, no search</text>
+
+  <line x1="340" y1="184" x2="340" y2="204" stroke="#8c959f" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Box 3: Hybrid Search API -->
+  <rect x="100" y="204" width="480" height="88" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="340" y="228" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">Hybrid Search API  ·  port 8001</text>
+  <text x="180" y="252" font-size="11" fill="#656d76">▸  BM25 full-text search  (PostgreSQL tsvector)</text>
+  <text x="180" y="268" font-size="11" fill="#656d76">▸  Vector cosine search  (pgvector · BGE-small · 384-dim)</text>
+  <text x="180" y="284" font-size="11" fill="#656d76">▸  Custom RRF scoring  (bug boost +50 / doc penalty −30)</text>
+
+  <line x1="340" y1="292" x2="340" y2="312" stroke="#8c959f" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Box 4: Answer API -->
+  <rect x="100" y="312" width="480" height="88" rx="6" fill="#ffffff" stroke="#d0d7de" stroke-width="1.5"/>
+  <text x="340" y="336" text-anchor="middle" font-size="13" font-weight="600" fill="#1f2328">Answer API  ·  port 8002</text>
+  <text x="180" y="360" font-size="11" fill="#656d76">▸  prompt_builder.py  (grounded context injection)</text>
+  <text x="180" y="376" font-size="11" fill="#656d76">▸  llm_client.py  (provider-agnostic: Gemini / Groq / Ollama)</text>
+  <text x="180" y="392" font-size="11" fill="#656d76">▸  Parse response  →  { tldr, explanation, code, citations }</text>
+
+  <line x1="340" y1="400" x2="340" y2="420" stroke="#8c959f" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Box 5: React UI -->
+  <rect x="140" y="420" width="400" height="44" rx="6" fill="#1a7f37"/>
+  <text x="340" y="442" text-anchor="middle" font-size="13" font-weight="600" fill="#ffffff">React UI  ·  port 3000</text>
+  <text x="340" y="458" text-anchor="middle" font-size="11" fill="#d3f8de">TL;DR  ·  Explanation  ·  Code Fix  ·  Citations</text>
+</svg>
