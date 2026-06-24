@@ -55,12 +55,36 @@ pip install fastapi uvicorn psycopg[binary] psycopg2-binary python-dotenv \
 cd debug-assistant-ui && npm install && cd ..
 ```
 
-### Step 4 — Ingest data (one-time setup)
+### Step 4 — Point to your repository and ingest
 
-Populates the database with commit history and embeddings. Only needs to run once.
+**To use your own repo** (replace the demo pandas dataset):
+
+1. Clone the target repository anywhere on your machine:
+
+   ```bash
+   git clone https://github.com/your-org/your-repo.git ~/rag_data/your-repo
+   ```
+
+2. Open `ingest_panda_commits_with_patch.py` and `create_patch_child_chunks.py` and update these two lines at the top of each file:
+
+   ```python
+   REPO = Path.home() / "rag_data" / "your-repo"   # path to your cloned repo
+   ```
+
+   Also update the project name string (search for `"pandas"` in both files and replace with your project name, e.g. `"my-repo"`).
+
+3. Optionally adjust `LIMIT = 500` in `ingest_panda_commits_with_patch.py` to control how many commits to ingest.
+
+**To try the system with the included pandas demo**, clone pandas first:
 
 ```bash
-# Stage 1: ingest 500 pandas commits with full patches
+git clone https://github.com/pandas-dev/pandas.git ~/rag_data/pandas
+```
+
+Then run the three ingestion stages:
+
+```bash
+# Stage 1: ingest commits with full patches
 python3 ingest_panda_commits_with_patch.py
 
 # Stage 2: generate AST-enriched per-file child chunks
