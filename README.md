@@ -2,6 +2,16 @@
 
 An on-premises RAG system that helps engineers diagnose bugs faster by searching historical fixes using natural language. Describe a crash, hang, or error in plain English and the system retrieves the most relevant historical bug fixes, root causes, and actual code patches — then synthesizes a grounded, cited answer using an LLM. No data leaves your infrastructure unless you choose a cloud LLM provider.
 
+## TL;DR
+
+- **What it does:** Type a bug description → get a cited answer with root cause, explanation, and code fix
+- **How it works:** Hybrid BM25 + vector search over your git history, answered by an LLM
+- **What it needs:** Docker, Python 3.11+, Node.js 18+, a free Google Gemini API key
+- **How to run:** `cp .env.example .env` → add API key → `./start_all.sh` → open [http://localhost:3000](http://localhost:3000)
+- **Bring your own repo:** Point the ingest scripts at any git repository, not just the included pandas demo
+
+---
+
 ## Demo
 
 <video src="https://github.com/user-attachments/assets/cf2fd47e-c705-49d4-9d5e-13940619d0fc" controls width="100%"></video>
