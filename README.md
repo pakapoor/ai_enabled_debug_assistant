@@ -518,6 +518,20 @@ V2 roadmap includes a multi-agent architecture: a **Triage Agent** (query classi
 - [ ] **HNSW index at scale** — currently commented out in `init.sql`; enable after bulk load for sub-millisecond approximate nearest-neighbor search
 - [ ] **Automated test suite** — property-based tests for query extraction; integration tests for the full pipeline against a fixed fixture corpus
 - [ ] **Streaming responses** — stream LLM tokens to the React UI to reduce perceived latency on slower providers
+- [ ] **Recency-weighted ranking (blame-search mode)** — introduce a query intent classifier that distinguishes between two fundamentally different search modes:
+
+  | Mode | Question being asked | Recency matters? |
+  |------|----------------------|-----------------|
+  | **Fix-search** *(current default)* | "What historical fix exists for this bug pattern?" | No — a 3-year-old fix for the same root cause is equally valuable |
+  | **Blame-search** *(new)* | "What changed recently that caused this regression?" | Yes — surface commits from the last 30/60/90 days touching relevant files/functions |
+
+  **Implementation approach:**
+  - Query understanding step extracts intent signals (`"regression"`, `"worked before"`, `"recent change"`, `"what broke"`) to classify the mode
+  - Blame-search applies a recency boost: `score += (days_since_epoch / max_days) * weight`
+  - Fix-search scoring remains unchanged
+  - UI labels which mode was used so the engineer understands why results are ranked as shown
+
+  > *Triggered by LinkedIn post engagement — real engineer feedback that recency weighting is a legitimate use case for regression debugging, distinct from fix-search intent.*
 
 ---
 
