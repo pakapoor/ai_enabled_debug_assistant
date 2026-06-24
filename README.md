@@ -533,6 +533,8 @@ V2 roadmap includes a multi-agent architecture: a **Triage Agent** (query classi
 
   > *Triggered by LinkedIn post engagement — real engineer feedback that recency weighting is a legitimate use case for regression debugging, distinct from fix-search intent.*
 
+- [ ] **Full codebase ingestion (optional mode)** — index the entire source tree alongside commit history, not just changed files. Enables retrieval to answer questions about code that was never modified in a bug fix commit (e.g. "how does function X work", "what does this class do"). Implemented as an opt-in per-project config flag since full codebase indexing significantly increases chunk count and retrieval latency. Uses the same AST chunking strategy as patch chunks — function-level granularity, not file-level.
+
 ---
 
 ## Development Utilities
