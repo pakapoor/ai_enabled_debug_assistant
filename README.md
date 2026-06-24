@@ -2,11 +2,100 @@
 
 An on-premises RAG system that helps engineers diagnose bugs faster by searching historical fixes using natural language. Describe a crash, hang, or error in plain English and the system retrieves the most relevant historical bug fixes, root causes, and actual code patches — then synthesizes a grounded, cited answer using an LLM. No data leaves your infrastructure unless you choose a cloud LLM provider.
 
-> **Screenshot:** *(to be added)*
-
 ## Demo
 
 <video src="https://github.com/user-attachments/assets/cf2fd47e-c705-49d4-9d5e-13940619d0fc" controls width="100%"></video>
+
+---
+
+## Deployment
+
+### System Requirements
+
+| Requirement | Version |
+| ----------- | ------- |
+| Python | 3.11+ |
+| Node.js | 18+ |
+| Docker | 24+ with Docker Compose |
+| RAM | 8 GB minimum (16 GB recommended for embedding generation) |
+| API key | Google Gemini — free tier sufficient for single-engineer use |
+
+### Step 1 — Clone the repository
+
+```bash
+git clone https://github.com/pakapoor/ai_enabled_debug_assistant.git
+cd ai_enabled_debug_assistant
+```
+
+### Step 2 — Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and set your Gemini API key:
+
+```bash
+GOOGLE_API_KEY=your_key_here
+GOOGLE_MODEL=gemini-2.0-flash
+```
+
+Get a free key at [aistudio.google.com](https://aistudio.google.com). All other values in `.env.example` work as-is for a local deployment.
+
+### Step 3 — Install dependencies
+
+```bash
+# Python (run from repo root with venv active)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install fastapi uvicorn psycopg[binary] psycopg2-binary python-dotenv \
+            FlagEmbedding requests google-genai
+
+# React UI
+cd debug-assistant-ui && npm install && cd ..
+```
+
+### Step 4 — Ingest data (one-time setup)
+
+Populates the database with commit history and embeddings. Only needs to run once.
+
+```bash
+# Stage 1: ingest 500 pandas commits with full patches
+python3 ingest_panda_commits_with_patch.py
+
+# Stage 2: generate AST-enriched per-file child chunks
+python3 create_patch_child_chunks.py
+
+# Stage 3: compute BGE-small-en-v1.5 embeddings
+python3 app/compute_embeddings.py
+```
+
+Expected result: ~2,037 chunks with embeddings in Postgres.
+
+### Step 5 — Start everything
+
+```bash
+./start_all.sh
+```
+
+This starts all services automatically:
+
+| Service | URL |
+| ------- | --- |
+| Hybrid search API | [http://localhost:8001](http://localhost:8001) |
+| Answer API | [http://localhost:8002](http://localhost:8002) |
+| React UI | [http://localhost:3000](http://localhost:3000) |
+
+### Step 6 — Try a query
+
+Open [http://localhost:3000](http://localhost:3000) and try:
+
+```text
+crash in generic.py around line 2393 not related to scheduler
+DataFrame groupby aggregate memory error
+BUG duplicated loses index
+hang in the dispatcher not a.cpp
+```
 
 ---
 
@@ -135,90 +224,6 @@ Swapping providers is a one-file change. Tested with:
 - **Ollama phi3:3.8b** — local CPU inference (slow, inconsistent instruction following)
 - **Groq llama-3.3-70b** — fast cloud inference, good quality
 - **Google Gemini 1.5 Flash / 2.0 Flash** — current default, best quality/cost ratio
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- Docker and Docker Compose
-- Python 3.11+ with a virtual environment
-- Node.js 18+ (for the React UI)
-- A Google Gemini API key (or Groq key) — see `.env.example`
-
-### 1. Start PostgreSQL
-
-```bash
-docker compose up -d postgres
-```
-
-This spins up `pgvector/pgvector:pg16` and runs `init.sql`, which creates the `chunks` table with a `vector(384)` column and GIN indexes for full-text search.
-
-### 2. Configure environment
-
-```bash
-cp .env.example .env
-# Edit .env — set GOOGLE_API_KEY (or GROQ_API_KEY)
-```
-
-### 3. Create virtual environment and install dependencies
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install fastapi uvicorn psycopg[binary] psycopg2-binary python-dotenv \
-            FlagEmbedding requests google-genai
-```
-
-### 4. Ingest data
-
-```bash
-# Stage 1: ingest 500 pandas commits with full patches
-python3 ingest_panda_commits_with_patch.py
-
-# Stage 2: generate AST-enriched per-file child chunks
-python3 create_patch_child_chunks.py
-
-# Stage 3: compute BGE-small-en-v1.5 embeddings
-python3 app/compute_embeddings.py
-```
-
-Expected result: ~2,037 chunks, all with 384-dimensional embeddings.
-
-```bash
-# Verify counts
-docker exec -it rag-demo-postgres psql -U raguser -d ragdemo \
-  -c "SELECT COUNT(*), COUNT(embedding) FROM chunks;"
-```
-
-### 5. Start the backend APIs
-
-```bash
-# Terminal 1: hybrid search (port 8001)
-bash start_server.sh
-
-# Terminal 2: answer pipeline (port 8002)
-uvicorn answer_api:app --host 0.0.0.0 --port 8002
-```
-
-### 6. Start the React UI
-
-```bash
-cd debug-assistant-ui
-npm install
-npm start
-# Opens http://localhost:3000
-```
-
-### Example queries
-
-```text
-crash in generic.py around line 2393 not related to scheduler
-DataFrame groupby aggregate memory error
-BUG duplicated loses index
-hang in the dispatcher not a.cpp
-```
 
 ---
 
