@@ -198,6 +198,19 @@ React UI  (port 3000)
 
 ---
 
+## Coming Soon
+
+- [ ] **One-click onboarding** — paste a Git URL and the system clones, ingests, and indexes your repo automatically, no manual scripts needed
+- [ ] **Blame-search mode** — ask "what changed recently that broke this?" and the system surfaces commits from the past 30/60/90 days, not just historical fixes
+- [ ] **Search your whole codebase** — opt in to index all source files, not just changed files, so you can ask questions about any function or class even if it was never in a bug fix commit
+- [ ] **Answers as they stream** — results appear word by word as the LLM generates them, no waiting for the full response
+- [ ] **Smarter result ranking** — a second-pass reranker filters candidates for relevance before presenting results, reducing noise in the top 3
+- [ ] **Repeat queries answered instantly** — results are cached for 24 hours so the same query returns immediately on second ask
+- [ ] **Multi-agent reasoning** — separate specialized agents for query understanding, retrieval, and fix suggestion work in parallel for richer answers
+- [ ] **Team-scale deployment** — authentication layer and multi-user support for shared team access
+
+---
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -565,34 +578,6 @@ V2 roadmap includes a multi-agent architecture: a **Triage Agent** (query classi
 **500-commit corpus is a proof of concept.** The pandas dataset was chosen for its dense, well-labelled bug history (`BUG:` prefixes, clean patches). Real deployment requires ingesting your own repository and potentially tuning the bug-detection heuristics for your team's commit conventions.
 
 **No authentication.** The APIs bind to `0.0.0.0` on localhost. Not suitable for networked or multi-user deployment without adding an auth layer.
-
----
-
-## V2 Roadmap
-
-- [ ] **Redis caching** — 24-hour TTL on search results and LLM answers for repeated queries
-- [ ] **Cross-encoder reranker** — `bge-reranker-large` as a second-pass step after hybrid fusion, replacing the current heuristic score formula
-- [ ] **LangGraph multi-agent orchestration** — separate agents for query understanding, retrieval, reranking, and generation; enables parallel retrieval strategies and richer reasoning traces
-- [ ] **Repo onboarding UI** — paste a Git URL, the system clones, ingests, and chunks automatically with no manual script execution
-- [ ] **HNSW index at scale** — currently commented out in `init.sql`; enable after bulk load for sub-millisecond approximate nearest-neighbor search
-- [ ] **Automated test suite** — property-based tests for query extraction; integration tests for the full pipeline against a fixed fixture corpus
-- [ ] **Streaming responses** — stream LLM tokens to the React UI to reduce perceived latency on slower providers
-- [ ] **Recency-weighted ranking (blame-search mode)** — introduce a query intent classifier that distinguishes between two fundamentally different search modes:
-
-  | Mode | Question being asked | Recency matters? |
-  |------|----------------------|-----------------|
-  | **Fix-search** *(current default)* | "What historical fix exists for this bug pattern?" | No — a 3-year-old fix for the same root cause is equally valuable |
-  | **Blame-search** *(new)* | "What changed recently that caused this regression?" | Yes — surface commits from the last 30/60/90 days touching relevant files/functions |
-
-  **Implementation approach:**
-  - Query understanding step extracts intent signals (`"regression"`, `"worked before"`, `"recent change"`, `"what broke"`) to classify the mode
-  - Blame-search applies a recency boost: `score += (days_since_epoch / max_days) * weight`
-  - Fix-search scoring remains unchanged
-  - UI labels which mode was used so the engineer understands why results are ranked as shown
-
-  > *Triggered by LinkedIn post engagement — real engineer feedback that recency weighting is a legitimate use case for regression debugging, distinct from fix-search intent.*
-
-- [ ] **Full codebase ingestion (optional mode)** — index the entire source tree alongside commit history, not just changed files. Enables retrieval to answer questions about code that was never modified in a bug fix commit (e.g. "how does function X work", "what does this class do"). Implemented as an opt-in per-project config flag since full codebase indexing significantly increases chunk count and retrieval latency. Uses the same AST chunking strategy as patch chunks — function-level granularity, not file-level.
 
 ---
 
