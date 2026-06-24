@@ -154,17 +154,29 @@ React UI  (port 3000)
 
 ![System Architecture](docs/debug_assistant_architecture.png)
 
----
-
-## Ingestion Flow
+### Ingestion Flow
 
 ![Ingestion Flow](docs/debug_assistant_ingestion_flow.png)
 
----
-
-## Retrieval Flow
+### Retrieval Flow
 
 ![Retrieval Flow](docs/debug_assistant_retrieval_flow.png)
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+| ----- | ---------- |
+| Vector store | PostgreSQL 16 + pgvector |
+| Embeddings | BGE-small-en-v1.5 (384-dim, FlagEmbedding) |
+| Full-text search | PostgreSQL `tsvector` / `ts_rank_cd` |
+| Backend APIs | FastAPI + Uvicorn |
+| LLM interface | Google Gemini (default), Groq, Ollama |
+| Frontend | React 19, Axios, react-syntax-highlighter |
+| Infrastructure | Docker Compose |
+| Language | Python 3.11, JavaScript (React) |
+| Data source | pandas GitHub repository (500 commits, ~2,037 chunks) |
 
 ---
 
@@ -322,22 +334,6 @@ CREATE INDEX ON chunks USING GIN(metadata);
 -- HNSW vector index (enable after bulk load — commented out in init.sql)
 -- CREATE INDEX ON chunks USING hnsw (embedding vector_cosine_ops);
 ```
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Vector store | PostgreSQL 16 + pgvector |
-| Embeddings | BGE-small-en-v1.5 (384-dim, FlagEmbedding) |
-| Full-text search | PostgreSQL `tsvector` / `ts_rank_cd` |
-| Backend APIs | FastAPI + Uvicorn |
-| LLM interface | Google Gemini (default), Groq, Ollama |
-| Frontend | React 19, Axios, react-syntax-highlighter |
-| Infrastructure | Docker Compose |
-| Language | Python 3.11, JavaScript (React) |
-| Data source | pandas GitHub repository (500 commits, ~2,037 chunks) |
 
 ---
 
