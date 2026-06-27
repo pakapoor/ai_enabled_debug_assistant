@@ -602,3 +602,105 @@ bash count_rows.sh
 # Generate synthetic YAML bugs for testing ingestion
 python3 generate_detailed_bugs.py
 ```
+
+---
+
+## Logging
+
+All services write structured JSON logs to `~/rag_logs/` (outside the project folder to avoid Google Drive sync issues).
+
+| Log file | Service | What it captures |
+|----------|---------|-----------------|
+| `~/rag_logs/answer_api.log` | Answer API (port 8002) | Every query, response time, model used, citation count, negations applied |
+| `~/rag_logs/hybrid_api.log` | Hybrid search API (port 8001) | Search requests, result counts, BM25/vector scores |
+| `~/rag_logs/react_ui.log` | React UI (port 3000) | npm start output, compilation errors |
+
+### Log format
+
+Each entry is a single JSON line (newline-delimited JSON):
+
+```json
+{
+  "timestamp": "2026-06-22T10:45:23.112000",
+  "endpoint": "/ask",
+  "query": "crash in groupby.pyx when group key contains NA values",
+  "response_time_seconds": 3.247,
+  "status": "ok",
+  "model": "gemini-3.1-flash-lite",
+  "results_used": 3,
+  "citations": 2,
+  "negations": []
+}
+```
+
+Low-confidence queries that triggered a follow-up question are logged separately:
+
+```json
+{
+  "timestamp": "2026-06-22T10:46:01.334000",
+  "endpoint": "/ask",
+  "query": "it crashed",
+  "response_time_seconds": 1.12,
+  "status": "low_confidence"
+}
+```
+
+### Useful log commands
+
+```bash
+# Watch live query activity
+tail -f ~/rag_logs/answer_api.log
+
+# Pretty-print the last 10 queries
+tail -10 ~/rag_logs/answer_api.log | python3 -m json.tool
+
+# Find all slow queries (over 5 seconds)
+grep -h "" ~/rag_logs/answer_api.log | python3 -c "
+import sys, json
+for line in sys.stdin:
+    try:
+        entry = json.loads(line)
+        if entry.get('response_time_seconds', 0) > 5:
+            print(f\"{entry['timestamp']} | {entry['response_time_seconds']}s | {entry['query']}\")
+    except: pass
+"
+
+# Count queries by status (ok vs low_confidence)
+grep -h "" ~/rag_logs/answer_api.log | python3 -c "
+import sys, json
+from collections import Counter
+counts = Counter()
+for line in sys.stdin:
+    try:
+        counts[json.loads(line).get('status', 'unknown')] += 1
+    except: pass
+for status, count in counts.items():
+    print(f'{status}: {count}')
+"
+
+# Find all queries that used negations
+grep -h "" ~/rag_logs/answer_api.log | python3 -c "
+import sys, json
+for line in sys.stdin:
+    try:
+        entry = json.loads(line)
+        if entry.get('negations'):
+            print(f\"{entry['timestamp']} | negations={entry['negations']} | {entry['query']}\")
+    except: pass
+"
+```
+
+### Viewing logs from start_all.sh
+
+When started via `./start_all.sh`, service logs are also written to `logs/` inside the project folder:
+
+```bash
+# View hybrid search API startup and request logs
+tail -f logs/hybrid_api.log
+
+# View answer API logs
+tail -f logs/answer_api.log
+
+# View React UI compilation output
+tail -f logs/react_ui.log
+```
