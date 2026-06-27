@@ -1,4 +1,5 @@
 import ast
+import os
 import re
 from pathlib import Path
 
@@ -7,8 +8,10 @@ from psycopg.types.json import Jsonb
 from config import POSTGRES_URL
 
 
-PROJECT = "your-project"          # change to your repo name (must match ingest_commits.py)
-REPO = Path.home() / "rag_data" / PROJECT
+# SET THIS: must match the PROJECT value used in ingest_commits.py.
+# Can also be set via the PROJECT env var.
+PROJECT = os.getenv("PROJECT", "your-project")
+REPO = Path(os.getenv("REPO_PATH", str(Path.home() / "rag_data" / PROJECT)))
 MAX_FUNCTION_CONTEXT_LINES = 120
 
 
@@ -156,65 +159,69 @@ FUNCTION: {function_name}
     return "\n\n".join(blocks)
 
 
-conn = psycopg.connect(POSTGRES_URL)
-cur = conn.cursor()
+if __name__ == "__main__":
+    if PROJECT == "your-project":
+        raise RuntimeError("Set PROJECT env var or edit the PROJECT line in this file before running.")
 
-cur.execute("""
-SELECT id, source_id, chunk_text, metadata
-FROM chunks
-WHERE project = %s
-  AND source_type = 'git_commit'
-  AND chunk_text LIKE '%PATCH:%'
-ORDER BY chunk_index;
-""", (PROJECT,))
+    conn = psycopg.connect(POSTGRES_URL)
+    cur = conn.cursor()
 
-parents = cur.fetchall()
+    cur.execute("""
+    SELECT id, source_id, chunk_text, metadata
+    FROM chunks
+    WHERE project = %s
+      AND source_type = 'git_commit'
+      AND chunk_text LIKE '%PATCH:%'
+    ORDER BY chunk_index;
+    """, (PROJECT,))
 
-inserted = 0
+    parents = cur.fetchall()
 
-for parent_id, commit_hash, chunk_text, metadata in parents:
-    patch = chunk_text.split("PATCH:", 1)[1].strip()
+    inserted = 0
 
-    file_patches = re.split(r"(?=^diff --git )", patch, flags=re.MULTILINE)
+    for parent_id, commit_hash, chunk_text, metadata in parents:
+        patch = chunk_text.split("PATCH:", 1)[1].strip()
 
-    patch_index = 0
+        file_patches = re.split(r"(?=^diff --git )", patch, flags=re.MULTILINE)
 
-    for fp in file_patches:
-        fp = fp.strip()
+        patch_index = 0
 
-        if not fp.startswith("diff --git "):
-            continue
+        for fp in file_patches:
+            fp = fp.strip()
 
-        match = re.search(r"^diff --git a/(.*?) b/(.*?)$", fp, flags=re.MULTILINE)
+            if not fp.startswith("diff --git "):
+                continue
 
-        if match:
-            old_file = match.group(1)
-            new_file = match.group(2)
-            file_name = new_file
-        else:
-            old_file = ""
-            new_file = ""
-            file_name = ""
+            match = re.search(r"^diff --git a/(.*?) b/(.*?)$", fp, flags=re.MULTILINE)
 
-        symbols = extract_symbols_from_patch(file_name, fp)
+            if match:
+                old_file = match.group(1)
+                new_file = match.group(2)
+                file_name = new_file
+            else:
+                old_file = ""
+                new_file = ""
+                file_name = ""
 
-        class_names = symbols["class_names"]
-        function_names = symbols["function_names"]
-        hunk_headers = symbols["hunk_headers"]
+            symbols = extract_symbols_from_patch(file_name, fp)
 
-        function_context = build_function_context_text(file_name, function_names)
+            class_names = symbols["class_names"]
+            function_names = symbols["function_names"]
+            hunk_headers = symbols["hunk_headers"]
 
-        patch_index += 1
+            function_context = build_function_context_text(file_name, function_names)
 
-        child_id = f"{parent_id}-patch-{patch_index:03d}"
+            patch_index += 1
 
-        subject = metadata.get("subject", "") if metadata else ""
-        author = metadata.get("author", "") if metadata else ""
-        date = metadata.get("date", "") if metadata else ""
+            child_id = f"{parent_id}-patch-{patch_index:03d}"
 
-        symbol_text = ""
-        if class_names or function_names or hunk_headers:
-            symbol_text = f"""
+            subject = metadata.get("subject", "") if metadata else ""
+            author = metadata.get("author", "") if metadata else ""
+            date = metadata.get("date", "") if metadata else ""
+
+            symbol_text = ""
+            if class_names or function_names or hunk_headers:
+                symbol_text = f"""
 SYMBOL CONTEXT:
 Classes: {", ".join(class_names)}
 Functions: {", ".join(function_names)}
@@ -222,14 +229,14 @@ Hunk headers:
 {chr(10).join(hunk_headers)}
 """
 
-        function_context_text = ""
-        if function_context:
-            function_context_text = f"""
+            function_context_text = ""
+            if function_context:
+                function_context_text = f"""
 FUNCTION CONTEXT:
 {function_context}
 """
 
-        child_text = f"""
+            child_text = f"""
 SOURCE: {PROJECT} git patch file
 COMMIT: {commit_hash}
 PARENT_CHUNK: {parent_id}
@@ -246,57 +253,57 @@ PATCH:
 {fp}
 """
 
-        child_metadata = {
-            "commit": commit_hash,
-            "parent_chunk": parent_id,
-            "subject": subject,
-            "author": author,
-            "date": date,
-            "file": file_name,
-            "old_file": old_file,
-            "new_file": new_file,
-            "chunk_kind": "patch_file",
-            "is_bug": metadata.get("is_bug", False) if metadata else False,
-            "class_names": class_names,
-            "function_names": function_names,
-            "hunk_headers": hunk_headers,
-            "has_function_context": bool(function_context),
-        }
+            child_metadata = {
+                "commit": commit_hash,
+                "parent_chunk": parent_id,
+                "subject": subject,
+                "author": author,
+                "date": date,
+                "file": file_name,
+                "old_file": old_file,
+                "new_file": new_file,
+                "chunk_kind": "patch_file",
+                "is_bug": metadata.get("is_bug", False) if metadata else False,
+                "class_names": class_names,
+                "function_names": function_names,
+                "hunk_headers": hunk_headers,
+                "has_function_context": bool(function_context),
+            }
 
-        cur.execute(
-            """
-            INSERT INTO chunks
-            (id, project, source_type, source_id, parent_id, chunk_index, chunk_text, metadata, embedding)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL)
-            ON CONFLICT (id) DO UPDATE
-            SET chunk_text = EXCLUDED.chunk_text,
-                metadata = EXCLUDED.metadata,
-                parent_id = EXCLUDED.parent_id,
-                embedding = NULL,
-                updated_at = now();
-            """,
-            (
-                child_id,
-                PROJECT,
-                "git_patch_file",
-                commit_hash,
-                parent_id,
-                patch_index,
-                child_text,
-                Jsonb(child_metadata),
-            ),
-        )
+            cur.execute(
+                """
+                INSERT INTO chunks
+                (id, project, source_type, source_id, parent_id, chunk_index, chunk_text, metadata, embedding)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL)
+                ON CONFLICT (id) DO UPDATE
+                SET chunk_text = EXCLUDED.chunk_text,
+                    metadata = EXCLUDED.metadata,
+                    parent_id = EXCLUDED.parent_id,
+                    embedding = NULL,
+                    updated_at = now();
+                """,
+                (
+                    child_id,
+                    PROJECT,
+                    "git_patch_file",
+                    commit_hash,
+                    parent_id,
+                    patch_index,
+                    child_text,
+                    Jsonb(child_metadata),
+                ),
+            )
 
-        inserted += 1
+            inserted += 1
 
-    if inserted % 100 == 0 and inserted > 0:
-        conn.commit()
-        print(f"Inserted/updated {inserted} patch child chunks...")
+        if inserted % 100 == 0 and inserted > 0:
+            conn.commit()
+            print(f"Inserted/updated {inserted} patch child chunks...")
 
-conn.commit()
-conn.close()
+    conn.commit()
+    conn.close()
 
-print(
-    f"Done. Inserted/updated {inserted} "
-    f"function-context patch child chunks from {len(parents)} parent commits."
-)
+    print(
+        f"Done. Inserted/updated {inserted} "
+        f"function-context patch child chunks from {len(parents)} parent commits."
+    )

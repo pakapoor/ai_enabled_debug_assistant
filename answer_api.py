@@ -2,10 +2,41 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import requests
 import time
+import logging
+import json
+from pathlib import Path
 from config import SEARCH_URL
 from query_understanding import extract_query
 from prompt_builder import build_prompt
 from llm_client import ask_llm
+
+# Logs outside Google Drive sync
+LOG_DIR = Path.home() / "rag_logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+log_file = LOG_DIR / "answer_api.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    handlers=[
+        logging.FileHandler(log_file),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+
+def log_request(endpoint: str, query: str, response_time: float, status: str, extra: dict = {}):
+    entry = {
+        "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+        "endpoint": endpoint,
+        "query": query,
+        "response_time_seconds": round(response_time, 3),
+        "status": status,
+        **extra
+    }
+    logger.info(json.dumps(entry))
 
 app = FastAPI()
 
@@ -91,6 +122,7 @@ def ask(q: str):
     parsed = extract_query(q)
 
     if parsed.get("confidence") == "low":
+        log_request("/ask", q, time.time() - start_time, "low_confidence")
         return {
             "confidence": "low",
             "follow_up": parsed.get("follow_up", "Can you provide more details?"),
@@ -106,6 +138,14 @@ def ask(q: str):
     resp = requests.get(SEARCH_URL, params={"q": q}, timeout=30)
     resp.raise_for_status()
     results = resp.json()
+
+    # Apply negation filtering: drop results whose text contains a negated term.
+    negations = [n.lower() for n in parsed.get("negations", [])]
+    if negations:
+        results = [
+            r for r in results
+            if not any(neg in r.get("text", "").lower() for neg in negations)
+        ]
 
     # Step 3: build prompt + ask LLM
     base_prompt = build_prompt(q, results)
@@ -134,6 +174,14 @@ def ask(q: str):
             "subject": subject
         })
 
+    response_time = time.time() - start_time
+    log_request("/ask", q, response_time, "ok", {
+        "model": __import__("config").GOOGLE_MODEL,
+        "results_used": len(results),
+        "citations": len(citations),
+        "negations": parsed.get("negations", []),
+    })
+
     return {
         "confidence": "high",
         "follow_up": None,
@@ -142,5 +190,5 @@ def ask(q: str):
         "code": sections["code"],
         "citations": citations,
         "negations": parsed.get("negations", []),
-        "time_taken": round(time.time() - start_time, 2)
+        "time_taken": round(response_time, 3),
     }

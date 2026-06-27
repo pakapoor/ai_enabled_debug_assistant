@@ -15,6 +15,24 @@ from llm_client import ask_llm
 
 from config import SEARCH_URL
 
+STRUCTURED_PROMPT_SUFFIX = """
+
+You MUST respond using EXACTLY these three section headers in this exact order.
+Do not skip any section. Do not add extra text before TLDR.
+
+TLDR:
+<one sentence: what was the bug and how was it fixed>
+
+EXPLANATION:
+<2-3 paragraphs: what caused the bug, why it happened, and what the fix does>
+
+CODE:
+<the actual diff lines from the patch. Must use diff format with - for removed lines and + for added lines. No markdown fences. Example:
+- old line of code
++ new line of code
+>
+"""
+
 
 def extract_field(text, label):
     marker = label + ":"
@@ -244,7 +262,14 @@ def ask_ai():
             resp.raise_for_status()
             results = resp.json()
 
-            prompt = build_prompt(q, results)
+            negations = [n.lower() for n in parsed.get("negations", [])]
+            if negations:
+                results = [
+                    r for r in results
+                    if not any(neg in r.get("text", "").lower() for neg in negations)
+                ]
+
+            prompt = build_prompt(q, results) + STRUCTURED_PROMPT_SUFFIX
 
             answer = ask_llm(prompt, timeout=60)
 

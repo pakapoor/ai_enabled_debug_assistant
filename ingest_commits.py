@@ -1,11 +1,17 @@
+import os
 import subprocess
 import psycopg
 from psycopg.types.json import Jsonb
 from pathlib import Path
 from config import POSTGRES_URL
 
-PROJECT = "your-project"          # change to your repo name (used as the project key in the DB)
-REPO = Path.home() / "rag_data" / PROJECT  # path to your cloned repo
+# SET THIS: short identifier for the repo (e.g. "pandas", "myapp").
+# Can also be set via the PROJECT env var.
+PROJECT = os.getenv("PROJECT", "your-project")
+if PROJECT == "your-project":
+    raise RuntimeError("Set PROJECT env var or edit the PROJECT line in this file before ingesting.")
+
+REPO = Path(os.getenv("REPO_PATH", str(Path.home() / "rag_data" / PROJECT)))
 LIMIT = 500
 MAX_PATCH_CHARS = 20000
 
