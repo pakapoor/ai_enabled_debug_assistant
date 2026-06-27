@@ -78,22 +78,19 @@ Open `.env` and set your Gemini API key:
 
 ```bash
 GOOGLE_API_KEY=your_key_here
-GOOGLE_MODEL=gemini-2.0-flash
+GOOGLE_MODEL=gemini-3.1-flash-lite
 ```
 
 Get a free key at [aistudio.google.com](https://aistudio.google.com). All other values in `.env.example` work as-is for a local deployment.
 
 ### Step 3 — Install dependencies
 
-```bash
-# Python (run from repo root with venv active)
-python3 -m venv .venv
-source .venv/bin/activate
-pip install fastapi uvicorn psycopg[binary] psycopg2-binary python-dotenv \
-            FlagEmbedding requests google-genai
+Dependencies are installed automatically when you run `./start_all.sh`.
 
-# React UI
-cd debug-assistant-ui && npm install && cd ..
+If you prefer to install manually first, run:
+
+```bash
+bash setup_dependencies.sh
 ```
 
 ### Step 4 — Point to your repository and ingest
@@ -348,6 +345,10 @@ Swapping providers is a one-file change. Tested with:
 ├── docker-compose.yml                  # Postgres + pgvector
 ├── .env.example                        # Environment variable template
 │
+├── start_all.sh                        # Starts all services (Postgres, APIs, React UI)
+├── setup_dependencies.sh               # Auto-installs Python packages and React dependencies
+├── stop_all.sh                         # Stops all running services cleanly
+│
 ├── hybrid_search_cli.py                # CLI: run hybrid search interactively
 ├── delete_commits.py                   # Dev utility: wipe chunks table
 ├── prompt_from_search.py               # Test harness: print built prompt
@@ -571,7 +572,7 @@ V2 roadmap includes a multi-agent architecture: a **Triage Agent** (query classi
 
 ## Known Limitations
 
-**Local inference is slow on this hardware.** The development machine is a Snapdragon X Elite laptop running WSL2. Ollama runs CPU-only because the Adreno GPU is not yet supported — phi3:3.8B takes 2–4 minutes per query. Cloud providers (Groq, Gemini) respond in under 5 seconds and produce significantly better output.
+**Local inference is slow on this hardware.** The development machine is a Snapdragon X laptop running WSL2. Ollama runs CPU-only because the Adreno GPU is not yet supported — phi3:3.8B takes 2–4 minutes per query. Cloud providers (Groq, Gemini) respond in under 5 seconds and produce significantly better output.
 
 **Small local models are inconsistent.** phi3:3.8B occasionally ignores the `TLDR: / EXPLANATION: / CODE:` format constraints, requiring fallback parsing logic in `answer_api.py`. Models at 30B+ (Groq llama-3.3-70b, Gemini) follow structured output instructions reliably.
 
